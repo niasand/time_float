@@ -5,52 +5,26 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.drawable.ClipDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
-import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
-import kotlin.math.roundToInt
 
 /**
- * 设置页：悬浮窗权限引导、显示开关、预设色板 + HEX 输入、透明度与字号调节。
+ * 设置页：悬浮窗权限引导、显示开关、圆盘取色（色相+饱和度+明度）、透明度与字号调节。
  * 所有改动写入 Prefs，运行中的悬浮窗通过监听即时生效。
  */
 class MainActivity : Activity() {
-
-    /** 预设色板，第一个为默认深灰 */
-    private val presetColors = intArrayOf(
-        0xFF2E2E2E.toInt(), // 深灰（默认）
-        0xFF000000.toInt(), // 纯黑
-        0xFF1A237E.toInt(), // 藏青
-        0xFF1B5E20.toInt(), // 墨绿
-        0xFF8E1418.toInt(), // 酒红
-        0xFF4A148C.toInt(), // 紫
-        0xFF4E342E.toInt(), // 棕
-        0xFF00695C.toInt(), // 青
-    )
-
-    private lateinit var tvPermStatus: TextView
-    private lateinit var btnGrant: Button
-    private lateinit var switchShow: Switch
-    private lateinit var etHex: EditText
-    private lateinit var sbAlpha: SeekBar
-    private lateinit var tvAlphaValue: TextView
-    private lateinit var sbFont: SeekBar
-    private lateinit var tvFontValue: TextView
-    private val swatches = mutableListOf<View>()
-
-    private val hexPattern = Regex("^[0-9A-Fa-f]{6}$")
 
     /** 开关联动的唯一逻辑：未授权时强制回弹；否则落库并启停服务 */
     private val switchToggleListener =
@@ -63,11 +37,22 @@ class MainActivity : Activity() {
             if (checked) OverlayService.start(this) else OverlayService.stop(this)
         }
 
+    private lateinit var tvPermStatus: TextView
+    private lateinit var btnGrant: Button
+    private lateinit var switchShow: Switch
+    private lateinit var wheel: ColorWheelView
+    private lateinit var sbBright: SeekBar
+    private lateinit var tvBrightValue: TextView
+    private lateinit var sbAlpha: SeekBar
+    private lateinit var tvAlphaValue: TextView
+    private lateinit var sbFont: SeekBar
+    private lateinit var tvFontValue: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         bindViews()
-        buildSwatches()
+        initColorPicker()
         initSeekBars()
         requestNotifPermissionIfNeeded()
     }
@@ -81,7 +66,9 @@ class MainActivity : Activity() {
         tvPermStatus = findViewById(R.id.tvPermStatus)
         btnGrant = findViewById(R.id.btnGrant)
         switchShow = findViewById(R.id.switchShow)
-        etHex = findViewById(R.id.etHex)
+        wheel = findViewById(R.id.colorWheel)
+        sbBright = findViewById(R.id.sbBright)
+        tvBrightValue = findViewById(R.id.tvBrightValue)
         sbAlpha = findViewById(R.id.sbAlpha)
         tvAlphaValue = findViewById(R.id.tvAlphaValue)
         sbFont = findViewById(R.id.sbFont)
@@ -96,7 +83,6 @@ class MainActivity : Activity() {
             )
         }
         switchShow.setOnCheckedChangeListener(switchToggleListener)
-        findViewById<Button>(R.id.btnApply).setOnClickListener { applyHex() }
     }
 
     /** 授权状态回来后刷新权限提示与开关可用态 */
@@ -114,57 +100,37 @@ class MainActivity : Activity() {
         switchShow.setOnCheckedChangeListener(switchToggleListener)
     }
 
-    private fun buildSwatches() {
-        val row = findViewById<LinearLayout>(R.id.swatchRow)
-        row.removeAllViews()
-        swatches.clear()
-        val dp = resources.displayMetrics.density
-        presetColors.forEach { color ->
-            val swatch = View(this)
-            swatch.layoutParams = LinearLayout.LayoutParams(
-                (36 * dp).roundToInt(), (36 * dp).roundToInt()
-            ).apply {
-                weight = 1f
-                marginStart = (3 * dp).roundToInt()
-                marginEnd = (3 * dp).roundToInt()
-            }
-            swatch.background = GradientDrawable().apply {
-                cornerRadius = 8 * dp
-                setColor(color)
-            }
-            swatch.setOnClickListener {
-                Prefs.setColor(this@MainActivity, color)
-                highlightSwatch(color)
-            }
-            row.addView(swatch)
-            swatches.add(swatch)
+    private fun initColorPicker() {
+        wheel.setColor(Prefs.color(this))
+        sbBright.progress = (wheel.brightness() * 100).toInt()
+        tvBrightValue.text = "${sbBright.progress}%"
+        refreshBrightnessBar()
+
+        wheel.onColorPicked = { color ->
+            Prefs.setColor(this, color)
+            // 色相/饱和度变了，明度条渐变终点跟着变
+            refreshBrightnessBar()
         }
-        highlightSwatch(Prefs.color(this))
+        sbBright.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                tvBrightValue.text = "$progress%"
+                wheel.setBrightness(progress / 100f)
+                Prefs.setColor(this@MainActivity, wheel.currentColor())
+            }
+
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
     }
 
-    /** 当前色对应的色块加白色描边；HEX 自定义色无匹配时全部取消描边 */
-    private fun highlightSwatch(color: Int) {
-        val dp = resources.displayMetrics.density
-        swatches.forEachIndexed { i, v ->
-            (v.background as GradientDrawable).apply {
-                if (presetColors[i] == color) {
-                    setStroke((2 * dp).roundToInt(), Color.WHITE)
-                } else {
-                    setStroke(0, Color.TRANSPARENT)
-                }
-            }
-        }
-    }
-
-    private fun applyHex() {
-        val raw = etHex.text.toString().trim().removePrefix("#")
-        if (!hexPattern.matches(raw)) {
-            Toast.makeText(this, R.string.hex_invalid, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val color = 0xFF000000.toInt() or raw.toInt(16)
-        Prefs.setColor(this, color)
-        highlightSwatch(color)
+    /** 明度条：黑 → 当前最亮色 的渐变，进度按 ClipDrawable 裁剪 */
+    private fun refreshBrightnessBar() {
+        val gradient = GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(Color.BLACK, wheel.fullBrightnessColor())
+        )
+        sbBright.progressDrawable =
+            ClipDrawable(gradient, Gravity.START, ClipDrawable.HORIZONTAL)
     }
 
     private fun initSeekBars() {
