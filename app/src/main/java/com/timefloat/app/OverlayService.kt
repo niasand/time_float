@@ -44,6 +44,11 @@ class OverlayService : Service() {
 
         const val ACTION_STOP = "com.timefloat.app.action.STOP"
 
+        /** 服务存活标记：onCreate 置真 / onDestroy 置假，供设置页自愈判断 */
+        @Volatile
+        var isRunning = false
+            private set
+
         fun start(context: Context) {
             ContextCompat.startForegroundService(
                 context, Intent(context, OverlayService::class.java)
@@ -76,6 +81,7 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefsListener)
     }
@@ -95,6 +101,7 @@ class OverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        isRunning = false
         handler.removeCallbacks(ticker)
         Prefs.sp(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
         overlay?.let { runCatching { wm.removeView(it) } }

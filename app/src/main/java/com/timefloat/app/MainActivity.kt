@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -41,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var btnGrant: Button
     private lateinit var switchShow: Switch
     private lateinit var wheel: ColorWheelView
+    private lateinit var tvPreview: TextView
     private lateinit var sbBright: SeekBar
     private lateinit var tvBrightValue: TextView
     private lateinit var sbAlpha: SeekBar
@@ -60,6 +62,11 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshPermissionState()
+        // 自愈：开关为开、权限在、但服务被系统/重装杀掉时，自动拉起
+        if (Prefs.isEnabled(this) && Settings.canDrawOverlays(this) && !OverlayService.isRunning) {
+            OverlayService.start(this)
+        }
+        refreshPreview()
     }
 
     private fun bindViews() {
@@ -67,6 +74,7 @@ class MainActivity : Activity() {
         btnGrant = findViewById(R.id.btnGrant)
         switchShow = findViewById(R.id.switchShow)
         wheel = findViewById(R.id.colorWheel)
+        tvPreview = findViewById(R.id.tvPreview)
         sbBright = findViewById(R.id.sbBright)
         tvBrightValue = findViewById(R.id.tvBrightValue)
         sbAlpha = findViewById(R.id.sbAlpha)
@@ -110,12 +118,14 @@ class MainActivity : Activity() {
             Prefs.setColor(this, color)
             // 色相/饱和度变了，明度条渐变终点跟着变
             refreshBrightnessBar()
+            refreshPreview()
         }
         sbBright.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                 tvBrightValue.text = "$progress%"
                 wheel.setBrightness(progress / 100f)
                 Prefs.setColor(this@MainActivity, wheel.currentColor())
+                refreshPreview()
             }
 
             override fun onStartTrackingTouch(sb: SeekBar?) {}
@@ -123,14 +133,28 @@ class MainActivity : Activity() {
         })
     }
 
-    /** 明度条：黑 → 当前最亮色 的渐变，进度按 ClipDrawable 裁剪 */
+    /** 明度条：黑 → 当前最亮色 的渐变，进度按 ClipDrawable 裁剪；必须给固有尺寸否则不可见 */
     private fun refreshBrightnessBar() {
+        val density = resources.displayMetrics.density
         val gradient = GradientDrawable(
             GradientDrawable.Orientation.LEFT_RIGHT,
             intArrayOf(Color.BLACK, wheel.fullBrightnessColor())
-        )
+        ).apply { setSize((density * 12).toInt(), (density * 12).toInt()) }
         sbBright.progressDrawable =
             ClipDrawable(gradient, Gravity.START, ClipDrawable.HORIZONTAL)
+    }
+
+    /** 实时预览：按当前 颜色×透明度+字号+对比文字色 渲染，与悬浮窗同款效果 */
+    private fun refreshPreview() {
+        val base = Prefs.color(this)
+        val alpha = (Prefs.alpha(this) * 255 / 100).coerceIn(0, 255)
+        tvPreview.background = GradientDrawable().apply {
+            cornerRadius = 24f
+            setColor(Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base)))
+        }
+        val lum = (0.299f * Color.red(base) + 0.587f * Color.green(base) + 0.114f * Color.blue(base)) / 255f
+        tvPreview.setTextColor(if (lum > 0.6f) Color.BLACK else Color.WHITE)
+        tvPreview.setTextSize(TypedValue.COMPLEX_UNIT_SP, Prefs.fontSp(this).toFloat())
     }
 
     private fun initSeekBars() {
@@ -142,6 +166,7 @@ class MainActivity : Activity() {
                 val value = progress + Prefs.MIN_ALPHA
                 tvAlphaValue.text = "$value%"
                 Prefs.setAlpha(this@MainActivity, value)
+                refreshPreview()
             }
 
             override fun onStartTrackingTouch(sb: SeekBar?) {}
@@ -155,6 +180,7 @@ class MainActivity : Activity() {
                 val value = progress + Prefs.MIN_FONT_SP
                 tvFontValue.text = "${value}sp"
                 Prefs.setFontSp(this@MainActivity, value)
+                refreshPreview()
             }
 
             override fun onStartTrackingTouch(sb: SeekBar?) {}

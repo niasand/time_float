@@ -58,6 +58,21 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="12dp" />
 
+        <!-- 实时预览：与悬浮窗同款样式（背景色+透明度+字号+对比文字色） -->
+        <TextView
+            android:id="@+id/tvPreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:paddingLeft="20dp"
+            android:paddingRight="20dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:text="12:34:56"
+            android:textStyle="bold"
+            android:fontFeatureSettings="tnum" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
