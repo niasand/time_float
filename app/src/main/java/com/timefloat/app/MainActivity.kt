@@ -10,7 +10,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.util.TypedValue
 import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
@@ -40,7 +39,7 @@ class MainActivity : Activity() {
     private lateinit var btnGrant: Button
     private lateinit var switchShow: Switch
     private lateinit var wheel: ColorWheelView
-    private lateinit var tvPreview: TextView
+    private lateinit var vPreview: View
     private lateinit var sbAlpha: SeekBar
     private lateinit var tvAlphaValue: TextView
     private lateinit var sbFont: SeekBar
@@ -70,7 +69,7 @@ class MainActivity : Activity() {
         btnGrant = findViewById(R.id.btnGrant)
         switchShow = findViewById(R.id.switchShow)
         wheel = findViewById(R.id.colorWheel)
-        tvPreview = findViewById(R.id.tvPreview)
+        vPreview = findViewById(R.id.vPreview)
         sbAlpha = findViewById(R.id.sbAlpha)
         tvAlphaValue = findViewById(R.id.tvAlphaValue)
         sbFont = findViewById(R.id.sbFont)
@@ -110,17 +109,14 @@ class MainActivity : Activity() {
         }
     }
 
-    /** 实时预览：按当前 颜色×透明度+字号+对比文字色 渲染，与悬浮窗同款效果 */
+    /** 实时预览：颜色×透明度 渲染的圆角色块 */
     private fun refreshPreview() {
         val base = Prefs.color(this)
         val alpha = (Prefs.alpha(this) * 255 / 100).coerceIn(0, 255)
-        tvPreview.background = GradientDrawable().apply {
+        vPreview.background = GradientDrawable().apply {
             cornerRadius = 24f
             setColor(Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base)))
         }
-        val lum = (0.299f * Color.red(base) + 0.587f * Color.green(base) + 0.114f * Color.blue(base)) / 255f
-        tvPreview.setTextColor(if (lum > 0.6f) Color.BLACK else Color.WHITE)
-        tvPreview.setTextSize(TypedValue.COMPLEX_UNIT_SP, Prefs.fontSp(this).toFloat())
     }
 
     private fun initSeekBars() {
