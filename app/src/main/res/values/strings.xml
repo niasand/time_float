@@ -11,7 +11,6 @@
     <string name="btn_grant">去授权</string>
     <string name="switch_show">显示悬浮窗</string>
     <string name="section_color">背景颜色（拖动圆盘选色）</string>
-    <string name="section_bright">明度</string>
     <string name="section_alpha">不透明度</string>
     <string name="section_font">时间字号</string>
     <string name="hint_usage">提示：按住悬浮窗可拖动，单击悬浮窗回到此页</string>

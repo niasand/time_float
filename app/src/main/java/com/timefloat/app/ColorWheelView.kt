@@ -18,7 +18,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * HSV 圆盘取色器：角度=色相，半径=饱和度（中心白），明度由外部明度滑杆控制。
+ * HSV 圆盘取色器：角度=色相，半径=饱和度（中心白），明度固定 1（所见即所得）。
  * 零依赖自绘：色相环位图只在尺寸变化时重建一次。
  */
 class ColorWheelView @JvmOverloads constructor(
@@ -31,7 +31,6 @@ class ColorWheelView @JvmOverloads constructor(
 
     private var hue = 0f
     private var sat = 1f
-    private var value = 1f
 
     private val hsv = FloatArray(3)
 
@@ -113,24 +112,13 @@ class ColorWheelView @JvmOverloads constructor(
         return super.performClick()
     }
 
-    /** 外部同步当前颜色（HEX 应用、初始化时使用） */
+    /** 外部同步当前颜色（初始化定位指针用，明度被忽略） */
     fun setColor(color: Int) {
         Color.colorToHSV(color, hsv)
         hue = hsv[0]
         sat = hsv[1]
-        value = hsv[2]
         invalidate()
     }
 
-    /** 明度滑杆联动 */
-    fun setBrightness(v: Float) {
-        value = v.coerceIn(0f, 1f)
-    }
-
-    fun brightness(): Float = value
-
-    fun currentColor(): Int = Color.HSVToColor(floatArrayOf(hue, sat, value))
-
-    /** 当前色相/饱和度下的最亮色，用于明度条渐变终点 */
-    fun fullBrightnessColor(): Int = Color.HSVToColor(floatArrayOf(hue, sat, 1f))
+    fun currentColor(): Int = Color.HSVToColor(floatArrayOf(hue, sat, 1f))
 }
