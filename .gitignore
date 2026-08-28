@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+captures/
+
+# 签名与产物
+*.jks
+*.keystore
+app/release/
+
+# macOS
+.DS_Store

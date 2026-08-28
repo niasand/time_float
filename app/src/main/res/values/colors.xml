@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#3F51B5</color>
+    <color name="primary_dark">#303F9F</color>
+    <color name="accent">#5C6BC0</color>
+    <color name="window_bg">#F5F5F5</color>
+    <color name="text_main">#212121</color>
+    <color name="text_hint">#757575</color>
+
+    <!-- 悬浮窗默认背景：深灰 -->
+    <color name="overlay_default_bg">#2E2E2E</color>
+    <!-- 自适应图标背景 -->
+    <color name="ic_launcher_background">#303F9F</color>
+</resources>

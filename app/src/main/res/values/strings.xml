@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">悬浮时钟</string>
+    <string name="notif_channel_name">悬浮时钟</string>
+    <string name="notif_title">悬浮时钟运行中</string>
+    <string name="notif_text">拖动悬浮窗移动位置，点击悬浮窗返回设置</string>
+    <string name="notif_stop">关闭悬浮窗</string>
+
+    <string name="perm_needed">需要\"显示在其他应用上层\"权限</string>
+    <string name="perm_granted">悬浮窗权限已授予</string>
+    <string name="btn_grant">去授权</string>
+    <string name="switch_show">显示悬浮窗</string>
+    <string name="section_color">背景颜色</string>
+    <string name="hex_hint">HEX 颜色，如 2E2E2E</string>
+    <string name="btn_apply">应用</string>
+    <string name="hex_invalid">颜色格式无效，应为 6 位十六进制</string>
+    <string name="section_alpha">不透明度</string>
+    <string name="section_font">时间字号</string>
+    <string name="hint_usage">提示：按住悬浮窗可拖动，单击悬浮窗回到此页</string>
+</resources>
