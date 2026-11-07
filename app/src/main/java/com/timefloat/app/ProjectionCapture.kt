@@ -44,6 +44,14 @@ class ProjectionCapture(
     /** 待交付的取帧请求；ImageReader 回调据此区分“丢弃帧”与“交付帧” */
     @Volatile
     private var pendingCallback: ((Bitmap?) -> Unit)? = null
+
+    /**
+     * 交付前需丢弃的帧数。点击时高亮尚未绘制（要等下一次 vsync），
+     * 队列里的最新帧是高亮前的旧画面，直接交付会截到无高亮画面；
+     * 丢弃 1 帧后，交付帧必然产生于高亮绘制之后（高亮持续 3 秒，远大于丢帧时延）。
+     */
+    @Volatile
+    private var framesToSkip = 0
     private var timeoutRunnable: Runnable? = null
 
     /** 接入授权结果（服务收到 consent extras 后调用一次）；幂等，失败自动回收 */
@@ -92,10 +100,12 @@ class ProjectionCapture(
             mainHandler.post { onDone(null) }
             return
         }
+        framesToSkip = SKIP_FRAMES
         pendingCallback = onDone
         val timeout = Runnable {
             val cb = pendingCallback
             pendingCallback = null
+            framesToSkip = 0
             timeoutRunnable = null
             mainHandler.post { cb?.invoke(null) }
         }
@@ -106,6 +116,7 @@ class ProjectionCapture(
     /** 释放全部资源；投影 onStop 与服务 onDestroy 双入口，幂等 */
     fun release() {
         pendingCallback = null
+        framesToSkip = 0
         timeoutRunnable?.let { captureHandler?.removeCallbacks(it) }
         timeoutRunnable = null
         runCatching { virtualDisplay?.release() }
@@ -126,6 +137,12 @@ class ProjectionCapture(
             return
         }
         val image = runCatching { reader.acquireLatestImage() }.getOrNull() ?: return
+        if (framesToSkip > 0) {
+            // 丢弃点击瞬间队列里的高亮前旧帧
+            framesToSkip--
+            image.close()
+            return
+        }
         pendingCallback = null
         timeoutRunnable?.let { captureHandler?.removeCallbacks(it) }
         timeoutRunnable = null
@@ -163,5 +180,6 @@ class ProjectionCapture(
 
     companion object {
         private const val TIMEOUT_MS = 1500L
+        private const val SKIP_FRAMES = 1
     }
 }
