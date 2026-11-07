@@ -1,6 +1,5 @@
 package com.timefloat.app
 
-import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,7 +15,6 @@ import android.graphics.Point
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
-import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -30,11 +28,9 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.IntentCompat
 import androidx.core.view.children
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -43,7 +39,7 @@ import kotlin.math.abs
 /**
  * 前台服务：持有 WindowManager 悬浮窗，秒级刷新时间。
  * 颜色/透明度/字号变化通过 SharedPreferences 监听即时生效，无需重建悬浮窗。
- * 悬浮窗右列竖排展示字幕标记：点击字幕 → 高亮数秒 → 整屏截屏 + 追加 SRT 记录。
+ * 悬浮窗右列竖排展示字幕标记：点击字幕高亮数秒，并追加一条 SRT 记录。
  */
 class OverlayService : Service() {
 
@@ -58,19 +54,9 @@ class OverlayService : Service() {
 
         const val ACTION_STOP = "com.timefloat.app.action.STOP"
 
-        /** 设置页回传整屏截屏授权结果（consent 单次有效，随用随传，不持久化） */
-        const val ACTION_PROJECTION_RESULT = "com.timefloat.app.action.PROJECTION_RESULT"
-        const val EXTRA_RESULT_CODE = "result_code"
-        const val EXTRA_RESULT_DATA = "result_data"
-
         /** 服务存活标记：onCreate 置真 / onDestroy 置假，供设置页自愈判断 */
         @Volatile
         var isRunning = false
-            private set
-
-        /** 整屏截屏授权状态（进程级），设置页据此刷新提示 */
-        @Volatile
-        var projectionReady = false
             private set
 
         fun start(context: Context) {
@@ -88,7 +74,7 @@ class OverlayService : Service() {
     private var overlay: View? = null
     private lateinit var params: WindowManager.LayoutParams
 
-    private lateinit var projectionCapture: ProjectionCapture
+    /** 落盘专用后台线程：SRT 读-改-写不阻塞主线程 */
     private var ioThread: HandlerThread? = null
     private var ioHandler: Handler? = null
 
@@ -128,9 +114,6 @@ class OverlayService : Service() {
         val thread = HandlerThread("tf_io").apply { start() }
         ioThread = thread
         ioHandler = Handler(thread.looper)
-
-        projectionCapture = ProjectionCapture(this, handler)
-        projectionCapture.onProjectionStopped = { projectionReady = false }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -138,29 +121,7 @@ class OverlayService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        // 整屏截屏授权结果：先以 mediaProjection 类型进前台（Android 14 顺序要求），再建投影
-        val consentCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-        val consentData = if (Build.VERSION.SDK_INT >= 33) {
-            intent?.let {
-                IntentCompat.getParcelableExtra(it, EXTRA_RESULT_DATA, Intent::class.java)
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            intent?.getParcelableExtra(EXTRA_RESULT_DATA)
-        }
-        val hasConsent = consentCode == Activity.RESULT_OK && consentData != null
-        startAsForeground(
-            if (hasConsent) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            } else {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            }
-        )
-        if (hasConsent) {
-            projectionCapture.setup(consentCode, consentData!!)
-            projectionReady = projectionCapture.isReady
-        }
+        startAsForeground()
         if (overlay == null && Settings.canDrawOverlays(this)) {
             addOverlay()
         }
@@ -171,11 +132,9 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         isRunning = false
-        projectionReady = false
         handler.removeCallbacks(ticker)
         revertRunnable?.let { handler.removeCallbacks(it) }
         Prefs.sp(this).unregisterOnSharedPreferenceChangeListener(prefsListener)
-        projectionCapture.release()
         ioHandler?.removeCallbacksAndMessages(null)
         ioThread?.quitSafely()
         ioThread = null
@@ -185,8 +144,11 @@ class OverlayService : Service() {
         super.onDestroy()
     }
 
-    private fun startAsForeground(type: Int = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) {
-        ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(), type)
+    private fun startAsForeground() {
+        ServiceCompat.startForeground(
+            this, NOTIF_ID, buildNotification(),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
     }
 
     private fun buildNotification(): Notification {
@@ -398,22 +360,11 @@ class OverlayService : Service() {
     private fun chipTextColor(base: Int): Int =
         if (luminance(base) > 0.6f) Color.BLACK else Color.WHITE
 
-    /** 点击字幕：高亮数秒自动恢复 + 整屏截屏 + 追加 SRT；未授权截屏时仅记录文字 */
+    /** 点击字幕：高亮数秒自动恢复，并追加一条 SRT 记录（后台线程落盘） */
     private fun onChipTapped(caption: String, chip: TextView) {
         highlightChip(chip)
         val at = System.currentTimeMillis()
-        if (!projectionCapture.isReady) {
-            Toast.makeText(this, getString(R.string.toast_capture_missing), Toast.LENGTH_SHORT)
-                .show()
-            ioHandler?.post { MarkerWriter.appendSrtLine(this, caption, at) }
-            return
-        }
-        projectionCapture.capture { bmp ->
-            ioHandler?.post {
-                bmp?.let { MarkerWriter.saveScreenshot(this, it, caption, at) }
-                MarkerWriter.appendSrtLine(this, caption, at)
-            }
-        }
+        ioHandler?.post { MarkerWriter.appendSrtLine(this, caption, at) }
     }
 
     private fun highlightChip(chip: TextView) {

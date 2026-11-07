@@ -3,7 +3,7 @@
     <string name="app_name">悬浮时钟</string>
     <string name="notif_channel_name">悬浮时钟</string>
     <string name="notif_title">悬浮时钟运行中</string>
-    <string name="notif_text">拖动移动位置；点击字幕截屏并记录，点击时钟返回设置</string>
+    <string name="notif_text">拖动移动位置；点击字幕记录 SRT，点击时钟返回设置</string>
     <string name="notif_stop">关闭悬浮窗</string>
 
     <string name="perm_needed">需要\"显示在其他应用上层\"权限</string>
@@ -13,7 +13,7 @@
     <string name="section_color">背景颜色（拖动圆盘选色）</string>
     <string name="section_alpha">不透明度</string>
     <string name="section_font">时间字号</string>
-    <string name="hint_usage">提示：按住时钟区域可拖动，单击时钟回到此页；点击字幕自动整屏截屏并记录 SRT（需先授权截屏）</string>
+    <string name="hint_usage">提示：按住时钟区域可拖动，单击时钟回到此页；点击字幕会高亮并记录一条 SRT（Download/TimeFloat/road_test_srt.srt）</string>
 
     <string name="section_captions">字幕标记（悬浮窗上竖排显示，点击即记录）</string>
     <string name="hint_caption_input">输入字幕，如 停车前</string>
@@ -23,11 +23,4 @@
     <string name="toast_caption_len">最多 %1$d 个字</string>
     <string name="toast_caption_dup">该字幕已存在</string>
     <string name="toast_caption_full">最多 %1$d 条字幕</string>
-
-    <string name="section_capture">整屏截屏授权</string>
-    <string name="capture_granted">已授权：点击字幕自动整屏截屏并存相册</string>
-    <string name="capture_needed">未授权：点击字幕仅记录文字，不截屏（授权每次启动后仅一次）</string>
-    <string name="btn_capture_grant">去授权截屏</string>
-    <string name="toast_capture_canceled">未完成授权，点击字幕将仅记录文字</string>
-    <string name="toast_capture_missing">未授权整屏截屏，仅记录文字</string>
 </resources>
