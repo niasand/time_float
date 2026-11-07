@@ -1,29 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 悬浮窗：日期 + 时间两行。背景色/圆角/字号由 OverlayService 运行时设置 -->
+<!-- 悬浮窗：左列日期+时间，右列字幕标记（竖排并列）。
+     背景色/圆角/字号由 OverlayService 运行时设置；字幕 chip 由服务程序化填充。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/overlayRoot"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:paddingLeft="16dp"
     android:paddingRight="16dp"
     android:paddingTop="10dp"
     android:paddingBottom="10dp">
 
-    <TextView
-        android:id="@+id/tvDate"
+    <!-- 左列：日期 + 时间 -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:textColor="#FFFFFF"
-        android:fontFeatureSettings="tnum" />
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/tvTime"
+        <TextView
+            android:id="@+id/tvDate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:textColor="#FFFFFF"
+            android:fontFeatureSettings="tnum" />
+
+        <TextView
+            android:id="@+id/tvTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+
+    <!-- 右列：字幕标记，竖排堆叠；无字幕时零宽不可见 -->
+    <LinearLayout
+        android:id="@+id/chipsContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:textStyle="bold"
-        android:textColor="#FFFFFF"
-        android:fontFeatureSettings="tnum" />
+        android:layout_marginStart="10dp"
+        android:orientation="vertical"
+        android:gravity="center_vertical" />
 </LinearLayout>

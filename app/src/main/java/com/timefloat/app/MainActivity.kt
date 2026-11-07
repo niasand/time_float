@@ -2,25 +2,32 @@ package com.timefloat.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.media.projection.MediaProjectionConfig
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 
 /**
- * 设置页：悬浮窗权限引导、显示开关、圆盘取色（色相+饱和度+明度）、透明度与字号调节。
- * 所有改动写入 Prefs，运行中的悬浮窗通过监听即时生效。
+ * 设置页：悬浮窗权限引导、显示开关、圆盘取色（色相+饱和度）、透明度与字号调节、
+ * 字幕标记管理与整屏截屏授权。所有改动写入 Prefs，运行中的悬浮窗通过监听即时生效。
  */
 class MainActivity : Activity() {
 
@@ -44,6 +51,11 @@ class MainActivity : Activity() {
     private lateinit var tvAlphaValue: TextView
     private lateinit var sbFont: SeekBar
     private lateinit var tvFontValue: TextView
+    private lateinit var etCaption: EditText
+    private lateinit var btnAddCaption: Button
+    private lateinit var captionList: LinearLayout
+    private lateinit var tvCaptureStatus: TextView
+    private lateinit var btnCaptureGrant: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +63,7 @@ class MainActivity : Activity() {
         bindViews()
         initColorPicker()
         initSeekBars()
+        initCaptions()
         requestNotifPermissionIfNeeded()
     }
 
@@ -62,6 +75,7 @@ class MainActivity : Activity() {
             OverlayService.start(this)
         }
         refreshPreview()
+        refreshCaptureStatus()
     }
 
     private fun bindViews() {
@@ -74,7 +88,13 @@ class MainActivity : Activity() {
         tvAlphaValue = findViewById(R.id.tvAlphaValue)
         sbFont = findViewById(R.id.sbFont)
         tvFontValue = findViewById(R.id.tvFontValue)
+        etCaption = findViewById(R.id.etCaption)
+        btnAddCaption = findViewById(R.id.btnAddCaption)
+        captionList = findViewById(R.id.captionList)
+        tvCaptureStatus = findViewById(R.id.tvCaptureStatus)
+        btnCaptureGrant = findViewById(R.id.btnCaptureGrant)
 
+        btnCaptureGrant.setOnClickListener { startCaptureConsent() }
         btnGrant.setOnClickListener {
             startActivity(
                 Intent(
@@ -158,5 +178,93 @@ class MainActivity : Activity() {
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         }
+    }
+
+    /** 字幕标记管理：添加校验 + 列表渲染，落库后悬浮窗经 prefs 监听即时重建 */
+    private fun initCaptions() {
+        renderCaptionRows()
+        btnAddCaption.setOnClickListener {
+            val text = etCaption.text.toString().trim()
+            when {
+                text.isEmpty() -> toast(getString(R.string.toast_caption_empty))
+                text.length > Prefs.MAX_CAPTION_LEN ->
+                    toast(getString(R.string.toast_caption_len, Prefs.MAX_CAPTION_LEN))
+                else -> {
+                    val list = Prefs.captions(this)
+                    when {
+                        text in list -> toast(getString(R.string.toast_caption_dup))
+                        list.size >= Prefs.MAX_CAPTIONS ->
+                            toast(getString(R.string.toast_caption_full, Prefs.MAX_CAPTIONS))
+                        else -> {
+                            list.add(text)
+                            Prefs.setCaptions(this, list)
+                            etCaption.setText("")
+                            renderCaptionRows()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun renderCaptionRows() {
+        captionList.removeAllViews()
+        Prefs.captions(this).forEach { text ->
+            val row = LayoutInflater.from(this).inflate(R.layout.item_caption, captionList, false)
+            row.findViewById<TextView>(R.id.tvCaptionText).text = text
+            row.findViewById<Button>(R.id.btnDeleteCaption).setOnClickListener {
+                Prefs.setCaptions(this, Prefs.captions(this).filterNot { it == text })
+                renderCaptionRows()
+            }
+            captionList.addView(row)
+        }
+    }
+
+    /**
+     * 发起整屏截屏授权。API 34+ 强制全屏捕获选项：
+     * 系统默认弹窗含“单应用共享”，单应用画面不含悬浮窗，会破坏截图对时需求。
+     */
+    private fun startCaptureConsent() {
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val intent = if (Build.VERSION.SDK_INT >= 34) {
+            mpm.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+        } else {
+            mpm.createScreenCaptureIntent()
+        }
+        startActivityForResult(intent, REQ_CAPTURE)
+    }
+
+    /** 授权结果转交服务：由服务按 consent→前台服务(mediaProjection)→建投影 的顺序接入 */
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_CAPTURE) return
+        if (resultCode == RESULT_OK && data != null) {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, OverlayService::class.java)
+                    .setAction(OverlayService.ACTION_PROJECTION_RESULT)
+                    .putExtra(OverlayService.EXTRA_RESULT_CODE, resultCode)
+                    .putExtra(OverlayService.EXTRA_RESULT_DATA, data)
+            )
+        } else {
+            toast(getString(R.string.toast_capture_canceled))
+        }
+    }
+
+    /** 授权状态为进程级：服务重启（开关悬浮窗/开机自启）后需重新授权 */
+    private fun refreshCaptureStatus() {
+        val ready = OverlayService.projectionReady
+        tvCaptureStatus.text =
+            getString(if (ready) R.string.capture_granted else R.string.capture_needed)
+        btnCaptureGrant.isEnabled = !ready
+    }
+
+    private fun toast(text: String) {
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+    }
+
+    companion object {
+        private const val REQ_CAPTURE = 2
     }
 }
