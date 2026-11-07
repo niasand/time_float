@@ -34,6 +34,7 @@ object MarkerWriter {
     private val lineFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
     private const val DIR = "TimeFloat"
+    private const val NAME_PREFIX = "road_test_srt"
     private const val FILE_NAME = "road_test_srt.srt"
 
     fun appendSrtLine(context: Context, caption: String, timeMs: Long): SrtResult {
@@ -43,14 +44,16 @@ object MarkerWriter {
                 val resolver = context.contentResolver
                 val collection =
                     MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                // MediaProvider 不支持 "wa" 追加写，存量内容用读-改-写
+                // MediaProvider 不支持 "wa" 追加写，存量内容用读-改-写。
+                // 按前缀匹配自有文件并取最新：撞名被系统改名（如 "road_test_srt (2).srt"）后
+                // 仍能接上同一文件，避免每次点击都再撞名、无限分裂出新文件。
                 val existingId = resolver.query(
                     collection,
                     arrayOf(MediaStore.MediaColumns._ID),
-                    "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND " +
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ? AND " +
                         "${MediaStore.MediaColumns.RELATIVE_PATH}=?",
-                    arrayOf(FILE_NAME, "${Environment.DIRECTORY_DOWNLOADS}/$DIR/"),
-                    null
+                    arrayOf("$NAME_PREFIX%", "${Environment.DIRECTORY_DOWNLOADS}/$DIR/"),
+                    "${MediaStore.MediaColumns._ID} DESC"
                 )?.use { c -> if (c.moveToFirst()) c.getLong(0) else null }
 
                 if (existingId != null) {
