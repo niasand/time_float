@@ -23,4 +23,5 @@
     <string name="toast_caption_len">最多 %1$d 个字</string>
     <string name="toast_caption_dup">该字幕已存在</string>
     <string name="toast_caption_full">最多 %1$d 条字幕</string>
+    <string name="toast_srt_renamed">检测到旧安装的 SRT 残留，新记录已启用 %1$s，请自行合并旧文件</string>
 </resources>

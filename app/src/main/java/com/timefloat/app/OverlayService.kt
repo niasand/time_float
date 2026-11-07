@@ -28,6 +28,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -364,7 +365,21 @@ class OverlayService : Service() {
     private fun onChipTapped(caption: String, chip: TextView) {
         highlightChip(chip)
         val at = System.currentTimeMillis()
-        ioHandler?.post { MarkerWriter.appendSrtLine(this, caption, at) }
+        ioHandler?.post {
+            when (val result = MarkerWriter.appendSrtLine(this, caption, at)) {
+                is SrtResult.Renamed -> {
+                    // 卸载重装等 uid 变化导致记录文件被系统改名，提示用户合并旧文件
+                    handler.post {
+                        Toast.makeText(
+                            this,
+                            getString(R.string.toast_srt_renamed, result.actualName),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+                else -> Unit
+            }
+        }
     }
 
     private fun highlightChip(chip: TextView) {

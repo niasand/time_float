@@ -22,8 +22,18 @@ object Prefs {
     /** 字幕标记列表（JSON 数组）。公开供服务按 key 分发监听 */
     const val KEY_CAPTIONS = "captions"
 
-    const val MAX_CAPTIONS = 10     // 字幕条数上限，防止悬浮窗占满屏幕
+    const val MAX_CAPTIONS = 16     // 字幕条数上限，防止悬浮窗占满屏幕（默认清单占 12）
     const val MAX_CAPTION_LEN = 12  // 单条字幕长度上限（字符）
+
+    /** 首次安装的默认字幕清单（路测停车动线）；用户增删过则以用户为准 */
+    private val DEFAULT_CAPTIONS = listOf(
+        "进入地下停车场前", "进入地下停车场后",
+        "离开地下停车场前", "离开地下停车场后",
+        "路边停车前", "路边停车后",
+        "路边起步前", "路边起步后",
+        "进入地面停车场前", "进入地面停车场后",
+        "离开地面停车场前", "离开地面停车场后"
+    )
 
     const val DEFAULT_COLOR = 0xFF2E2E2E.toInt() // 深灰
     const val DEFAULT_ALPHA = 100
@@ -67,13 +77,14 @@ object Prefs {
         sp(context).edit().putInt(KEY_POS_X, x).putInt(KEY_POS_Y, y).apply()
     }
 
-    /** 字幕标记列表；存量数据损坏时按空列表处理 */
+    /** 字幕标记列表；从未设置过或数据损坏时返回默认清单 */
     fun captions(context: Context): MutableList<String> {
-        val raw = sp(context).getString(KEY_CAPTIONS, null) ?: return mutableListOf()
+        val raw = sp(context).getString(KEY_CAPTIONS, null)
+            ?: return DEFAULT_CAPTIONS.toMutableList()
         return runCatching {
             val arr = JSONArray(raw)
             MutableList(arr.length()) { arr.optString(it) }
-        }.getOrDefault(mutableListOf())
+        }.getOrDefault(DEFAULT_CAPTIONS.toMutableList())
     }
 
     /** 落库前统一清洗：去首尾空白、去空项、去重、截断条数上限 */
